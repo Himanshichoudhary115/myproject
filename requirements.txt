@@ -1,8 +1,10 @@
 streamlit==1.47.0
 streamlit-lottie==0.0.5
 opencv-python-headless==4.9.0.80
-numpy==2.3.1
+numpy==1.26.4  # ✅ safest known working version with OpenCV
 pandas==2.3.1
 scikit-learn
+# mediapipe removed — not compatible with Python 3.13 yet
+
 # mediapipe removed: not compatible with Python 3.13
 
