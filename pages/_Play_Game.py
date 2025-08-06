@@ -5,8 +5,9 @@ import mediapipe as mp
 import time
 import json
 from streamlit_lottie import st_lottie
-from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase, RTCConfiguration
 import av
+import cv2  # Make sure this is imported
 
 # ------------------------ Page Config ------------------------
 st.set_page_config(page_title="Play Game", page_icon="🎮")
@@ -41,6 +42,13 @@ if "player_move" not in st.session_state:
 if "result_shown" not in st.session_state:
     st.session_state.result_shown = False
 
+# ------------------------ RTC Configuration (STUN) ------------------------
+RTC_CONFIGURATION = RTCConfiguration(
+    {
+        "iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]
+    }
+)
+
 # ------------------------ Title ------------------------
 st.title("🎮 Let's Play!")
 st.markdown("Make a gesture in front of your webcam (✊, ✋, ✌️) to play against the computer.")
@@ -71,7 +79,6 @@ class VideoProcessor(VideoProcessorBase):
             cv2.putText(img, f"You: {self.detected_move}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
 
-            # Save prediction after a few seconds
             if time.time() - self.last_prediction_time > 5 and not st.session_state.result_shown:
                 st.session_state.player_move = self.detected_move
                 st.session_state.result_shown = True
@@ -87,10 +94,10 @@ if st.button("🚀 Start Game"):
         key="game",
         video_processor_factory=VideoProcessor,
         media_stream_constraints={"video": True, "audio": False},
+        rtc_configuration=RTC_CONFIGURATION,
         async_processing=True,
     )
 
-    # Wait and then show result
     time.sleep(7)
 
     player_move = st.session_state.player_move
@@ -122,7 +129,6 @@ if st.button("🚀 Start Game"):
                 st_lottie(lottie_lose, height=300)
             st.error("😢 You Lose!")
 
-        # Display updated scores
         st.markdown("---")
         st.markdown(f"### 🔢 Current Score")
         st.markdown(f"🧍 You: **{st.session_state.player_score}** &nbsp;&nbsp;&nbsp;&nbsp; 💻 Computer: **{st.session_state.computer_score}**")
