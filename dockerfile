@@ -1,4 +1,3 @@
-# Use a base image with Python
 FROM python:3.9-slim
 
 # Install system dependencies
@@ -9,23 +8,22 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     ffmpeg \
-    libavdevice-dev \
-    libavfilter-dev \
-    libopus-dev \
+    libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
 
-# Copy files
+# Copy all files
 COPY . /app
 
-# Install Python dependencies
+# Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port
+# Expose Streamlit port
 EXPOSE 8501
 
-# Run the app
-CMD ["streamlit", "run", "app.py", "--server.enableWebsocketCompression=false"]
+# Run Streamlit app
+CMD ["streamlit", "run", "Play_Game.py", "--server.enableWebsocketCompression=false"]
+
 
