@@ -1,11 +1,12 @@
 import streamlit as st
 import pickle
-import cv2
 import numpy as np
 import mediapipe as mp
 import time
 import json
 from streamlit_lottie import st_lottie
+from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
+import av
 
 # ------------------------ Page Config ------------------------
 st.set_page_config(page_title="Play Game", page_icon="🎮")
@@ -28,7 +29,6 @@ model = pickle.load(open("gesture_model.pkl", "rb"))
 
 # ------------------------ MediaPipe Setup ------------------------
 mp_hands = mp.solutions.hands
-hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
 mp_draw = mp.solutions.drawing_utils
 
 # ------------------------ Init Session State ------------------------
@@ -36,56 +36,72 @@ if "player_score" not in st.session_state:
     st.session_state.player_score = 0
 if "computer_score" not in st.session_state:
     st.session_state.computer_score = 0
+if "player_move" not in st.session_state:
+    st.session_state.player_move = None
+if "result_shown" not in st.session_state:
+    st.session_state.result_shown = False
 
-# ------------------------ Game Page ------------------------
+# ------------------------ Title ------------------------
 st.title("🎮 Let's Play!")
 st.markdown("Make a gesture in front of your webcam (✊, ✋, ✌️) to play against the computer.")
 
-# ------------------------ Start Game ------------------------
-if st.button("🚀 Start Game"):
-    cap = cv2.VideoCapture(0)
-    options = ["rock", "paper", "scissors"]
-    player_move = None
+# ------------------------ Video Processor Class ------------------------
+class VideoProcessor(VideoProcessorBase):
+    def __init__(self):
+        self.hands = mp_hands.Hands(static_image_mode=False, max_num_hands=1, min_detection_confidence=0.5)
+        self.last_prediction_time = time.time()
+        self.detected_move = None
 
-    stframe = st.empty()
-    result_text = st.empty()
-    start_time = time.time()
+    def recv(self, frame):
+        img = frame.to_ndarray(format="bgr24")
+        img = cv2.flip(img, 1)
+        rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        results = self.hands.process(rgb)
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        if results.multi_hand_landmarks and not st.session_state.result_shown:
+            hand_landmarks = results.multi_hand_landmarks[0]
+            mp_draw.draw_landmarks(img, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-        frame = cv2.flip(frame, 1)
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = hands.process(frame_rgb)
-
-        if results.multi_hand_landmarks:
-            for handLms in results.multi_hand_landmarks:
-                mp_draw.draw_landmarks(frame, handLms, mp_hands.HAND_CONNECTIONS)
-
-            landmarks = results.multi_hand_landmarks[0].landmark
-            data = [lm.x for lm in landmarks] + [lm.y for lm in landmarks] + [lm.z for lm in landmarks]
+            data = [lm.x for lm in hand_landmarks.landmark] + \
+                   [lm.y for lm in hand_landmarks.landmark] + \
+                   [lm.z for lm in hand_landmarks.landmark]
             prediction = model.predict([data])[0]
-            player_move = prediction.lower()
+            self.detected_move = prediction.lower()
 
-            cv2.putText(frame, f"You: {player_move}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+            cv2.putText(img, f"You: {self.detected_move}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
 
-        stframe.image(frame, channels="BGR", use_container_width=True)
+            # Save prediction after a few seconds
+            if time.time() - self.last_prediction_time > 5 and not st.session_state.result_shown:
+                st.session_state.player_move = self.detected_move
+                st.session_state.result_shown = True
 
-        if time.time() - start_time > 7:
-            break
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
-    cap.release()
-    cv2.destroyAllWindows()
+# ------------------------ Game Logic ------------------------
+if st.button("🚀 Start Game"):
+    st.session_state.result_shown = False
+    st.session_state.player_move = None
 
-    # ------------------------ Result Section ------------------------
+    webrtc_streamer(
+        key="game",
+        video_processor_factory=VideoProcessor,
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
+
+    # Wait and then show result
+    time.sleep(7)
+
+    player_move = st.session_state.player_move
+    options = ["rock", "paper", "scissors"]
+
     if player_move is None:
-        result_text.error("🙁 Could not detect your move. Try again!")
+        st.error("🙁 Could not detect your move. Try again!")
     else:
         computer_move = np.random.choice(options)
-        result_text.markdown(f"🧍 You chose: **{player_move.capitalize()}**")
-        result_text.markdown(f"💻 Computer chose: **{computer_move.capitalize()}**")
+        st.markdown(f"🧍 You chose: **{player_move.capitalize()}**")
+        st.markdown(f"💻 Computer chose: **{computer_move.capitalize()}**")
 
         if player_move == computer_move:
             if lottie_draw:
