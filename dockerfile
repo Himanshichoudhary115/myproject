@@ -1,7 +1,7 @@
 # Use a base image with Python
 FROM python:3.9-slim
 
-# Install system dependencies for OpenCV, libGL, etc.
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
@@ -9,20 +9,23 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     ffmpeg \
+    libavdevice-dev \
+    libavfilter-dev \
+    libopus-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set the working directory
+# Set working directory
 WORKDIR /app
 
-# Copy project files to container
+# Copy files
 COPY . /app
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose Streamlit port
+# Expose port
 EXPOSE 8501
 
-# Run Streamlit
-CMD ["streamlit", "run", "app.py"]
+# Run the app
+CMD ["streamlit", "run", "app.py", "--server.enableWebsocketCompression=false"]
 
