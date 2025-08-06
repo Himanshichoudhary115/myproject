@@ -3,5 +3,5 @@ opencv-python-headless==4.7.0.72
 mediapipe==0.10.15
 numpy==1.23.5
 streamlit-lottie==0.0.3
-
+Pillow
 
